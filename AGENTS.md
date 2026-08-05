@@ -11,6 +11,9 @@ internal link, and writes results to `results/<domain>/`:
 - `broken.csv` — links returning HTTP 4xx/5xx or failing to connect
 - `external.csv` — links pointing to other domains
 - `graph.html` — networkx/pyvis visualization of the link graph
+- `mirror/` — (with `-m`) offline copy of pages + assets, links rewritten to
+  relative paths, URL layout preserved (e.g. `/category/category_1.html` ->
+  `mirror/category/category_1.html`)
 
 `main.py` is the whole app (single file). `website/public/` is a static test
 site (HTML-entity-encoded `href`s, broken links, external links) served by a
@@ -22,6 +25,7 @@ lighttpd docker container for testing.
 ./run.sh                      # create venv (env/) + install deps + run
 ./main.py                     # crawl default domain 127.0.0.1
 ./main.py -d example.com -b requests     # no-browser crawl
+./main.py -d 127.0.0.1 -m                # mirror site for offline use
 ./main.py -t requests -d example.com     # smoke test fetching
 docker compose up -d          # start test site (in website/dockers/)
 ```
