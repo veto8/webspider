@@ -6,8 +6,10 @@ import multiprocessing as mp
 import os
 import re
 import sys
+import threading
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -48,6 +50,14 @@ ASSET_TAGS = (
     ("iframe", "src"),
     ("track", "src"),
 )
+
+BINARY_EXTS = {
+    ".gif", ".jpg", ".jpeg", ".png", ".webp", ".svg", ".ico", ".bmp", ".tif", ".tiff",
+    ".css", ".js", ".mjs", ".json", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".mp4", ".mp3", ".ogg", ".ogv", ".webm", ".avi", ".mov", ".wav", ".flac", ".mpg", ".mpeg",
+    ".pdf", ".zip", ".gz", ".bz2", ".7z", ".rar", ".doc", ".docx", ".xls", ".xlsx",
+    ".sql", ".dat", ".bin", ".exe", ".swf",
+}
 
 URL_RE = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.I)
 
@@ -189,7 +199,8 @@ def save_file(mirror_root, url, content):
     dest.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(content, str):
         content = content.encode("utf-8", "ignore")
-    dest.write_bytes(content)
+    with open(dest, "wb") as f:
+        f.write(content)
 
 
 def complete_asset(data, url, headers):
@@ -382,7 +393,14 @@ class GetDomains:
             f = self.mirror_root / local_path(page)
             if not f.exists():
                 continue
-            f.write_text(rewrite_page(f.read_text(errors="ignore"), page, self.domain, existing))
+            if f.suffix.lower() in BINARY_EXTS:
+                continue
+            content = f.read_bytes()
+            if b"\x00" in content[:1024]:
+                continue
+            f.write_text(
+                rewrite_page(content.decode("utf-8", errors="ignore"), page, self.domain, existing)
+            )
 
     def process_items(self, items):
         for url in items:
@@ -400,16 +418,16 @@ class GetDomains:
         queue = list(self.all_assets)
         seen = set()
         saved = 0
-        while queue:
-            url = queue.pop(0)
-            if url in seen:
-                continue
-            seen.add(url)
+        lock = threading.Lock()
+
+        def handle(url):
+            nonlocal saved
             if urlparse(url).hostname != self.domain:
-                continue
+                return
             if local_path(url) in page_paths and url not in self.all_assets:
-                continue
-            for attempt in range(3):
+                return
+            data = None
+            for _ in range(3):
                 try:
                     code, headers, content = http_get(url)
                     if code >= 400:
@@ -417,23 +435,38 @@ class GetDomains:
                     ctype = headers.get("Content-Type", "")
                     if "text/html" in ctype or "xhtml" in ctype:
                         break
-                    data = content
-                    if not complete_asset(data, url, headers):
+                    if not complete_asset(content, url, headers):
                         continue
+                    data = content
                     break
                 except Exception:
                     continue
-            else:
-                continue
+            if data is None:
+                return
+            print("...asset: {0} ({1} bytes)".format(url, len(data)), flush=True)
             if urlparse(url).path.lower().endswith(".css"):
                 text = data.decode("utf-8", errors="replace")
                 for ref in extract_url_refs(text, url):
                     if urlparse(ref).hostname == self.domain:
-                        queue.append(ref)
+                        with lock:
+                            if ref not in seen:
+                                queue.append(ref)
                 save_file(self.mirror_root, url, rewrite_url_refs(text, url, self.domain))
             else:
                 save_file(self.mirror_root, url, data)
-            saved += 1
+            with lock:
+                saved += 1
+
+        with ThreadPoolExecutor(max_workers=self.p) as ex:
+            while queue:
+                with lock:
+                    batch = list(queue)
+                    queue.clear()
+                for url in batch:
+                    seen.add(url)
+                futures = [ex.submit(handle, u) for u in batch]
+                for fut in futures:
+                    fut.result()
         print("...assets saved: {0}".format(saved))
 
     def complete(self):
