@@ -182,6 +182,17 @@ def save_file(mirror_root, url, content):
     dest.write_bytes(content)
 
 
+def complete_asset(data, url, headers):
+    """True if the downloaded asset looks complete (length + known end markers)."""
+    clen = headers.get("Content-Length")
+    if clen and not headers.get("Content-Encoding") and int(clen) != len(data):
+        return False
+    path = urlparse(url).path.lower()
+    if path.endswith(".gif") and (not data or data[-1] != 0x3b):
+        return False
+    return True
+
+
 def fetch_page(url, browser):
     if browser == "chrome":
         chrome_options = Options()
@@ -230,7 +241,17 @@ def crawl_url(url, domain, browser, return_dict, mirror_root=None):
                 links, assets = parse_page(html_text, url)
             except Exception:
                 pass
-        if mirror_root:
+        if mirror_root and isinstance(html_text, bytes):
+            ok = False
+            for _ in range(3):
+                r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
+                if complete_asset(r.content, url, r.headers):
+                    html_text = r.content
+                    ok = True
+                    break
+            if not ok:
+                html_text = None
+        if mirror_root and html_text is not None:
             save_file(mirror_root, url, html_text)
         return_dict[url] = {"links": links, "assets": assets}
     except requests.RequestException:
@@ -378,26 +399,33 @@ class GetDomains:
             seen.add(url)
             if urlparse(url).hostname != self.domain:
                 continue
-            if local_path(url) in page_paths:
+            if local_path(url) in page_paths and url not in self.all_assets:
                 continue
-            try:
-                r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
-                if r.status_code >= 400:
+            for attempt in range(3):
+                try:
+                    r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
+                    if r.status_code >= 400:
+                        break
+                    ctype = r.headers.get("Content-Type", "")
+                    if "text/html" in ctype or "xhtml" in ctype:
+                        break
+                    data = r.content
+                    if not complete_asset(data, url, r.headers):
+                        continue
+                    break
+                except Exception:
                     continue
-                ctype = r.headers.get("Content-Type", "")
-                if "text/html" in ctype or "xhtml" in ctype:
-                    continue
-                if urlparse(url).path.lower().endswith(".css"):
-                    text = r.text
-                    for ref in extract_url_refs(text, url):
-                        if urlparse(ref).hostname == self.domain:
-                            queue.append(ref)
-                    save_file(self.mirror_root, url, rewrite_url_refs(text, url, self.domain))
-                else:
-                    save_file(self.mirror_root, url, r.content)
-                saved += 1
-            except Exception:
+            else:
                 continue
+            if urlparse(url).path.lower().endswith(".css"):
+                text = data.decode("utf-8", errors="replace")
+                for ref in extract_url_refs(text, url):
+                    if urlparse(ref).hostname == self.domain:
+                        queue.append(ref)
+                save_file(self.mirror_root, url, rewrite_url_refs(text, url, self.domain))
+            else:
+                save_file(self.mirror_root, url, data)
+            saved += 1
         print("...assets saved: {0}".format(saved))
 
     def complete(self):
@@ -473,7 +501,7 @@ def serve(directory, port=8899):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(directory), **kwargs)
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    httpd = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     url = "http://127.0.0.1:{0}/".format(port)
     print("...serving {0} at {1} (Ctrl+C to stop)".format(directory, url))
     try:
