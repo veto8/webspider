@@ -1,0 +1,24 @@
+[project]
+name = "webspider"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Myridia"}
+]
+license = "GPL3"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "requests (>=2.34.2,<3.0.0)",
+    "bs4 (>=0.0.2,<0.0.3)",
+    "pyvis (>=0.3.2,<0.4.0)",
+    "selenium (>=4.46.0,<5.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false

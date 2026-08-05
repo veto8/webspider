@@ -5,10 +5,7 @@ App to query a Website domain and extract all linked urls and domains
 ```
 git clone https://github.com/myridia/webspider.git
 cd webspider
-python3 -m venv env
-. env/bin/activate
-pip install pip --upgrade
-pip install -r requirements.txt
+poetry install
 ```
 
 ## Usage
@@ -31,7 +28,7 @@ cd website/dockers/
 docker-compose up -d
 ```
 
-### Run ./main.py to access the docker website what runs on your local host 127.0.0.1
+### Local Test Run ./main.py to access the docker website what runs on your local host 127.0.0.1
 ```
 cd ../../
 ./main.py
