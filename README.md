@@ -1,15 +1,28 @@
 # Webspider
-App to query a Websitdomain and extract all linked urls and domains 
+App to query a Website domain and extract all linked urls and domains 
 
 ## Install
 ```
 git clone https://github.com/myridia/webspider.git
-cd get_linked_domains
+cd webspider
 python3 -m venv env
 . env/bin/activate
 pip install pip --upgrade
 pip install -r requirements.txt
 ```
+
+## Usage
+```
+./main.py -d <domain> [-p http|https] [-w workers] [-s delay] [-b chrome|firefox|edge|requests]
+```
+- `-d` domain to crawl (default: `127.0.0.1`)
+- `-p` protocol (default: `https`, falls back to `http` automatically)
+- `-w` parallel workers (default: 5)
+- `-s` delay in seconds between batches (default: 0.2)
+- `-b` fetcher backend (default: `chrome`, use `requests` to avoid a browser)
+
+Results (links, broken, external, graph.html) are written to `results/<domain>/`.
+Run `./main.py -t requests -d <domain>` to verify fetching works without a browser.
 
 ## Test run
 ### Run Docker to simulate a nested website on local host 127.0.0.1

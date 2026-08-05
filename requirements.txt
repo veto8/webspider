@@ -1,6 +1,5 @@
 selenium
 beautifulsoup4
-validators
 networkx
 pyvis
 requests
