@@ -32,6 +32,15 @@ Saves every page and its assets (CSS, JS, images, fonts) under
 internal links rewritten to relative paths so the site works fully offline.
 Open `results/<domain>/mirror/index.html` in a browser to browse the archived site.
 
+### Preview the mirror with a local server
+```
+./main.py -d <domain> --serve [--port 8899]
+```
+Serves the existing `results/<domain>/mirror/` at `http://127.0.0.1:8899/` with
+directory listing, so you can click through the archived site exactly as it
+would be offline. `--serve` only serves an already-created mirror (it does not
+crawl); stop with `Ctrl+C`.
+
 ## Test run
 ### Run Docker to simulate a nested website on local host 127.0.0.1
 ```

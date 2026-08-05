@@ -26,6 +26,7 @@ lighttpd docker container for testing.
 ./main.py                     # crawl default domain 127.0.0.1
 ./main.py -d example.com -b requests     # no-browser crawl
 ./main.py -d 127.0.0.1 -m                # mirror site for offline use
+./main.py -d example.com --serve         # serve existing mirror at :8899
 ./main.py -t requests -d example.com     # smoke test fetching
 docker compose up -d          # start test site (in website/dockers/)
 ```

@@ -5,6 +5,7 @@ import datetime
 import multiprocessing as mp
 import os
 import re
+import sys
 import time
 import warnings
 from pathlib import Path
@@ -465,6 +466,22 @@ def test(browser, domain, protocol):
         print("..test failed:", exc)
 
 
+def serve(directory, port=8899):
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(directory), **kwargs)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    url = "http://127.0.0.1:{0}/".format(port)
+    print("...serving {0} at {1} (Ctrl+C to stop)".format(directory, url))
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n...stopped")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="webspider",
@@ -484,10 +501,21 @@ if __name__ == "__main__":
         "-m", "--mirror", action="store_true",
         help="save pages and assets under results/<domain>/mirror for offline use",
     )
+    parser.add_argument(
+        "--serve", action="store_true",
+        help="serve an existing mirror with a local web server (no crawling)",
+    )
+    parser.add_argument("--port", default=8899, type=int)
 
     args = parser.parse_args()
 
-    if args.test:
+    if args.serve:
+        mirror_dir = Path("results") / args.domain / "mirror"
+        if not mirror_dir.exists():
+            print("..no mirror found at {0} - crawl with -m first".format(mirror_dir))
+            sys.exit(1)
+        serve(mirror_dir, args.port)
+    elif args.test:
         test(args.test, args.domain, args.protocol)
     else:
         d = GetDomains(
