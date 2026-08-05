@@ -11,8 +11,7 @@ import warnings
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-import requests
-import urllib3
+import httpx
 from bs4 import BeautifulSoup
 from pyvis.network import Network
 from selenium import webdriver
@@ -24,8 +23,19 @@ import networkx as nx
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) webspider/1.0"}
 
+
+def http_get(url, timeout=15):
+    """GET a URL; return (status, headers-dict, content-bytes)."""
+    r = httpx.get(url, timeout=timeout, verify=False, headers=HEADERS, follow_redirects=True)
+    return r.status_code, dict(r.headers), r.content
+
+
+def http_head(url, timeout=10):
+    """HEAD a URL; return (status, headers-dict)."""
+    r = httpx.head(url, timeout=timeout, verify=False, headers=HEADERS, follow_redirects=True)
+    return r.status_code, dict(r.headers)
+
 warnings.simplefilter("ignore")
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ASSET_TAGS = (
     ("link", "href"),
@@ -221,16 +231,15 @@ def fetch_page(url, browser):
         content = b.page_source
         b.quit()
     else:
-        r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
-        content = r.content
+        _, _, content = http_get(url)
     return content
 
 
 def crawl_url(url, domain, browser, return_dict, mirror_root=None):
     """Worker: probe the URL, extract links, optionally save page for the mirror."""
     try:
-        check = requests.head(url, timeout=10, verify=False, headers=HEADERS)
-        if check.status_code >= 400:
+        code, _ = http_head(url)
+        if code >= 400:
             return_dict[url] = False
             return
         html_text = fetch_page(url, browser)
@@ -244,9 +253,9 @@ def crawl_url(url, domain, browser, return_dict, mirror_root=None):
         if mirror_root and isinstance(html_text, bytes):
             ok = False
             for _ in range(3):
-                r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
-                if complete_asset(r.content, url, r.headers):
-                    html_text = r.content
+                code, headers, content = http_get(url)
+                if complete_asset(content, url, headers):
+                    html_text = content
                     ok = True
                     break
             if not ok:
@@ -254,8 +263,6 @@ def crawl_url(url, domain, browser, return_dict, mirror_root=None):
         if mirror_root and html_text is not None:
             save_file(mirror_root, url, html_text)
         return_dict[url] = {"links": links, "assets": assets}
-    except requests.RequestException:
-        return_dict[url] = False
     except Exception as exc:
         print("...error fetching {0}: {1}".format(url, exc), flush=True)
         return_dict[url] = False
@@ -295,9 +302,10 @@ class GetDomains:
         for scheme in (self.protocol, fallback):
             url = "{0}://{1}".format(scheme, self.domain)
             try:
-                requests.head(url, timeout=8, verify=False, headers=HEADERS)
-                return url
-            except requests.RequestException:
+                code, _ = http_head(url, timeout=8)
+                if code < 400:
+                    return url
+            except Exception:
                 continue
         return "{0}://{1}".format(self.protocol, self.domain)
 
@@ -403,14 +411,14 @@ class GetDomains:
                 continue
             for attempt in range(3):
                 try:
-                    r = requests.get(url, timeout=15, verify=False, headers=HEADERS)
-                    if r.status_code >= 400:
+                    code, headers, content = http_get(url)
+                    if code >= 400:
                         break
-                    ctype = r.headers.get("Content-Type", "")
+                    ctype = headers.get("Content-Type", "")
                     if "text/html" in ctype or "xhtml" in ctype:
                         break
-                    data = r.content
-                    if not complete_asset(data, url, r.headers):
+                    data = content
+                    if not complete_asset(data, url, headers):
                         continue
                     break
                 except Exception:
@@ -480,7 +488,7 @@ def test(browser, domain, protocol):
             options.add_argument("headless")
             b = webdriver.Edge(options=options)
         else:
-            content = requests.get(url, timeout=15, verify=False, headers=HEADERS).content
+            _, _, content = http_get(url)
             print(content)
             print("..test ok: count characters: {0}".format(len(content)))
             return

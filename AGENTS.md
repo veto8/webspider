@@ -39,7 +39,7 @@ Run crawling against the local test site with the docker container running.
   environment. Package installs are not possible here.
 - Therefore verify code statically: `python3 -m py_compile main.py`.
 - Full runtime testing requires the user's machine (deps: selenium,
-  beautifulsoup4, networkx, pyvis, requests; chromedriver for `-b chrome`).
+  beautifulsoup4, networkx, pyvis, httpx; chromedriver for `-b chrome`).
 
 ## Conventions
 
