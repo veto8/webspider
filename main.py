@@ -561,7 +561,7 @@ if __name__ == "__main__":
         "-d", "--domain", default="127.0.0.1", help="domain to crawl (default: 127.0.0.1)"
     )
     parser.add_argument("-p", "--protocol", default="https", choices=["http", "https"])
-    parser.add_argument("-w", "--worker", default=5, type=int)
+    parser.add_argument("-w", "--worker", default=20, type=int)
     parser.add_argument("-s", "--slowdown", default=0.2, type=float)
     parser.add_argument(
         "-b", "--browser", default="chrome", choices=["chrome", "firefox", "edge", "requests"]
